@@ -36,9 +36,9 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE 1
 #endif
-#if defined(MDB_VL32) || defined(__WIN64__)
+//#if defined(MDB_VL32) || defined(__WIN64__)
 #define _FILE_OFFSET_BITS	64
-#endif
+//#endif
 
 #ifdef _WIN32
 #include <malloc.h>
@@ -218,27 +218,17 @@ union semun {
 #define VGMEMP_DEFINED(a,s)
 #endif
 
-//#ifndef BYTE_ORDER
-//# if (defined(_LITTLE_ENDIAN) || defined(_BIG_ENDIAN)) && !(defined(_LITTLE_ENDIAN) && defined(_BIG_ENDIAN))
-///* Solaris just defines one or the other */
-//#  define LITTLE_ENDIAN	1234
-//#  define BIG_ENDIAN	4321
-//#  ifdef _LITTLE_ENDIAN
-//#   define BYTE_ORDER  LITTLE_ENDIAN
-//#  else
-//#   define BYTE_ORDER  BIG_ENDIAN
-//#  endif
-//# else
-//#  define BYTE_ORDER   __BYTE_ORDER
-//# endif
-//#endif
+#ifdef __SIZEOF_POINTER__
+#if __SIZEOF_POINTER__ != 8
+#error "only 64 bit systems are supported"
+#endif
+#endif
 
-//#ifndef LITTLE_ENDIAN
-//#define LITTLE_ENDIAN	__LITTLE_ENDIAN
-//#endif
-//#ifndef BIG_ENDIAN
-//#define BIG_ENDIAN	__BIG_ENDIAN
-//#endif
+#ifdef __BYTE_ORDER__
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+#error "only LITTLE ENDIAN systems are supported"
+#endif
+#endif
 
 #if defined(__i386) || defined(__x86_64) || defined(_M_IX86)
 #define MISALIGNED_OK	1
@@ -247,22 +237,7 @@ union semun {
 #include "lmdb.h"
 #include "midl.h"
 
-//#if (BYTE_ORDER == LITTLE_ENDIAN) == (BYTE_ORDER == BIG_ENDIAN)
-//# error "Unknown or unsupported endianness (BYTE_ORDER)"
-//#elif (-6 & 5) || CHAR_BIT!=8 || UINT_MAX!=0xffffffff || MDB_SIZE_MAX%UINT_MAX
-//# error "Two's complement, reasonably sized integer types, please"
-//#endif
-
-#ifdef __GNUC__
-/** Put infrequently used env functions in separate section */
-# ifdef __APPLE__
-#  define	ESECT	__attribute__ ((section("__TEXT,text_env")))
-# else
-#  define	ESECT	__attribute__ ((section("text_env")))
-# endif
-#else
 #define ESECT
-#endif
 
 #ifdef _WIN32
 #define CALL_CONV WINAPI
@@ -1210,15 +1185,15 @@ typedef struct MDB_meta {
 	uint32_t	mm_magic;
 		/** Version number of this file. Must be set to #MDB_DATA_VERSION. */
 	uint32_t	mm_version;
-#ifdef MDB_VL32
-	union {		/* always zero since we don't support fixed mapping in MDB_VL32 */
-		MDB_ID	mmun_ull;
-		void *mmun_address;
-	} mm_un;
-#define	mm_address mm_un.mmun_address
-#else
+//#ifdef MDB_VL32
+//	union {		/* always zero since we don't support fixed mapping in MDB_VL32 */
+//		MDB_ID	mmun_ull;
+//		void *mmun_address;
+//	} mm_un;
+//#define	mm_address mm_un.mmun_address
+//#else
 	void		*mm_address;		/**< address for fixed mapping */
-#endif
+//#endif
 	mdb_size_t	mm_mapsize;			/**< size of mmap region */
 	MDB_db		mm_dbs[CORE_DBS];	/**< first is free space, 2nd is main db */
 	/** The size of pages used in this DB */
@@ -1250,7 +1225,9 @@ typedef union MDB_metabuf {
 	 *	only a single copy of this record in the environment.
 	 */
 typedef struct MDB_dbx {
-	MDB_val		md_name;		/**< name of the database */
+    static_assert( sizeof(void *) == 8, "only 64 bit platform is supported" );
+
+    MDB_val		md_name;		/**< name of the database */
 	MDB_cmp_func	*md_cmp;	/**< function for comparing keys */
 	MDB_cmp_func	*md_dcmp;	/**< function for comparing data items */
 	MDB_rel_func	*md_rel;	/**< user relocate function */
@@ -1265,9 +1242,9 @@ struct MDB_txn {
 	/** Nested txn under this txn, set together with flag #MDB_TXN_HAS_CHILD */
 	MDB_txn		*mt_child;
 	pgno_t		mt_next_pgno;	/**< next unallocated page */
-#ifdef MDB_VL32
-	pgno_t		mt_last_pgno;	/**< last written page */
-#endif
+//#ifdef MDB_VL32
+//	pgno_t		mt_last_pgno;	/**< last written page */
+//#endif
 	/** The ID of this transaction. IDs are integers incrementing from 1.
 	 *	Only committed write transactions increment the ID. If a transaction
 	 *	aborts, the ID may be re-used by the next writer.
@@ -1315,19 +1292,19 @@ struct MDB_txn {
 	MDB_cursor	**mt_cursors;
 	/** Array of flags for each DB */
     uint8_t	*mt_dbflags;
-#ifdef MDB_VL32
-	/** List of read-only pages (actually chunks) */
-	MDB_ID3L	mt_rpages;
-	/** We map chunks of 16 pages. Even though Windows uses 4KB pages, all
-	 * mappings must begin on 64KB boundaries. So we round off all pgnos to
-	 * a chunk boundary. We do the same on Linux for symmetry, and also to
-	 * reduce the frequency of mmap/munmap calls.
-	 */
-#define MDB_RPAGE_CHUNK	16
-#define MDB_TRPAGE_SIZE	4096	/**< size of #mt_rpages array of chunks */
-#define MDB_TRPAGE_MAX	(MDB_TRPAGE_SIZE-1)	/**< maximum chunk index */
-	uint64_t mt_rpcheck;	/**< threshold for reclaiming unref'd chunks */
-#endif
+//#ifdef MDB_VL32
+//	/** List of read-only pages (actually chunks) */
+//	MDB_ID3L	mt_rpages;
+//	/** We map chunks of 16 pages. Even though Windows uses 4KB pages, all
+//	 * mappings must begin on 64KB boundaries. So we round off all pgnos to
+//	 * a chunk boundary. We do the same on Linux for symmetry, and also to
+//	 * reduce the frequency of mmap/munmap calls.
+//	 */
+//#define MDB_RPAGE_CHUNK	16
+//#define MDB_TRPAGE_SIZE	4096	/**< size of #mt_rpages array of chunks */
+//#define MDB_TRPAGE_MAX	(MDB_TRPAGE_SIZE-1)	/**< maximum chunk index */
+//	uint64_t mt_rpcheck;	/**< threshold for reclaiming unref'd chunks */
+//#endif
 	/**	Number of DB records in use, or 0 when the txn is finished.
 	 *	This number only ever increments until the txn finishes; we
 	 *	don't decrement it when individual DB handles are closed.
@@ -1417,14 +1394,14 @@ struct MDB_cursor {
 	uint64_t	mc_flags;	/**< @ref mdb_cursor */
 	MDB_page	*mc_pg[CURSOR_STACK];	/**< stack of pushed pages */
 	indx_t		mc_ki[CURSOR_STACK];	/**< stack of page indices */
-#ifdef MDB_VL32
-	MDB_page	*mc_ovpg;		/**< a referenced overflow page */
-#	define MC_OVPG(mc)			((mc)->mc_ovpg)
-#	define MC_SET_OVPG(mc, pg)	((mc)->mc_ovpg = (pg))
-#else
+//#ifdef MDB_VL32
+//	MDB_page	*mc_ovpg;		/**< a referenced overflow page */
+//#	define MC_OVPG(mc)			((mc)->mc_ovpg)
+//#	define MC_SET_OVPG(mc, pg)	((mc)->mc_ovpg = (pg))
+//#else
 #	define MC_OVPG(mc)			((MDB_page *)0)
 #	define MC_SET_OVPG(mc, pg)	((void)0)
-#endif
+//#endif
 };
 
 	/** Context for sorted-dup records.
@@ -1471,9 +1448,9 @@ struct MDB_env {
 	HANDLE		me_fd;		/**< The main data file */
 	HANDLE		me_lfd;		/**< The lock file */
 	HANDLE		me_mfd;		/**< For writing and syncing the meta pages */
-#if defined(MDB_VL32) && defined(_WIN32)
-	HANDLE		me_fmh;		/**< File Mapping handle */
-#endif
+//#if defined(MDB_VL32) && defined(_WIN32)
+//	HANDLE		me_fmh;		/**< File Mapping handle */
+//#endif
 	/** Failed to update the meta page. Probably an I/O error. */
 #define	MDB_FATAL_ERROR	0x80000000U
 	/** Some fields are initialized. */
@@ -1536,13 +1513,13 @@ struct MDB_env {
 	char		me_mutexname[sizeof(MUTEXNAME_PREFIX) + 11];
 # endif
 #endif
-#ifdef MDB_VL32
-	MDB_ID3L	me_rpages;	/**< like #mt_rpages, but global to env */
-	pthread_mutex_t	me_rpmutex;	/**< control access to #me_rpages */
-#define MDB_ERPAGE_SIZE	16384
-#define MDB_ERPAGE_MAX	(MDB_ERPAGE_SIZE-1)
-	uint64_t me_rpcheck;
-#endif
+//#ifdef MDB_VL32
+//	MDB_ID3L	me_rpages;	/**< like #mt_rpages, but global to env */
+//	pthread_mutex_t	me_rpmutex;	/**< control access to #me_rpages */
+//#define MDB_ERPAGE_SIZE	16384
+//#define MDB_ERPAGE_MAX	(MDB_ERPAGE_SIZE-1)
+//	uint64_t me_rpcheck;
+//#endif
 	void		*me_userctx;	 /**< User-settable context */
 	MDB_assert_func *me_assert_func; /**< Callback for assertion failures */
 };
@@ -2071,52 +2048,52 @@ mdb_dlist_free(MDB_txn *txn)
 	dl[0].mid = 0;
 }
 
-#ifdef MDB_VL32
-static void
-mdb_page_unref(MDB_txn *txn, MDB_page *mp)
-{
-	pgno_t pgno;
-	MDB_ID3L tl = txn->mt_rpages;
-	unsigned x, rem;
-	if (mp->mp_flags & (P_SUBP|P_DIRTY))
-		return;
-	rem = mp->mp_pgno & (MDB_RPAGE_CHUNK-1);
-	pgno = mp->mp_pgno ^ rem;
-	x = mdb_mid3l_search(tl, pgno);
-	if (x != tl[0].mid && tl[x+1].mid == mp->mp_pgno)
-		x++;
-	if (tl[x].mref)
-		tl[x].mref--;
-}
-#define MDB_PAGE_UNREF(txn, mp)	mdb_page_unref(txn, mp)
+//#ifdef MDB_VL32
+//static void
+//mdb_page_unref(MDB_txn *txn, MDB_page *mp)
+//{
+//	pgno_t pgno;
+//	MDB_ID3L tl = txn->mt_rpages;
+//	unsigned x, rem;
+//	if (mp->mp_flags & (P_SUBP|P_DIRTY))
+//		return;
+//	rem = mp->mp_pgno & (MDB_RPAGE_CHUNK-1);
+//	pgno = mp->mp_pgno ^ rem;
+//	x = mdb_mid3l_search(tl, pgno);
+//	if (x != tl[0].mid && tl[x+1].mid == mp->mp_pgno)
+//		x++;
+//	if (tl[x].mref)
+//		tl[x].mref--;
+//}
+//#define MDB_PAGE_UNREF(txn, mp)	mdb_page_unref(txn, mp)
 
-static void
-mdb_cursor_unref(MDB_cursor *mc)
-{
-	int i;
-	if (mc->mc_txn->mt_rpages[0].mid) {
-		if (!mc->mc_snum || !mc->mc_pg[0] || IS_SUBP(mc->mc_pg[0]))
-			return;
-		for (i=0; i<mc->mc_snum; i++)
-			mdb_page_unref(mc->mc_txn, mc->mc_pg[i]);
-		if (mc->mc_ovpg) {
-			mdb_page_unref(mc->mc_txn, mc->mc_ovpg);
-			mc->mc_ovpg = 0;
-		}
-	}
-	mc->mc_snum = mc->mc_top = 0;
-	mc->mc_pg[0] = NULL;
-	mc->mc_flags &= ~C_INITIALIZED;
-}
-#define MDB_CURSOR_UNREF(mc, force) \
-	(((force) || ((mc)->mc_flags & C_INITIALIZED)) \
-	 ? mdb_cursor_unref(mc) \
-	 : (void)0)
+//static void
+//mdb_cursor_unref(MDB_cursor *mc)
+//{
+//	int i;
+//	if (mc->mc_txn->mt_rpages[0].mid) {
+//		if (!mc->mc_snum || !mc->mc_pg[0] || IS_SUBP(mc->mc_pg[0]))
+//			return;
+//		for (i=0; i<mc->mc_snum; i++)
+//			mdb_page_unref(mc->mc_txn, mc->mc_pg[i]);
+//		if (mc->mc_ovpg) {
+//			mdb_page_unref(mc->mc_txn, mc->mc_ovpg);
+//			mc->mc_ovpg = 0;
+//		}
+//	}
+//	mc->mc_snum = mc->mc_top = 0;
+//	mc->mc_pg[0] = NULL;
+//	mc->mc_flags &= ~C_INITIALIZED;
+//}
+//#define MDB_CURSOR_UNREF(mc, force) \
+//	(((force) || ((mc)->mc_flags & C_INITIALIZED)) \
+//	 ? mdb_cursor_unref(mc) \
+//	 : (void)0)
 
-#else
+//#else
 #define MDB_PAGE_UNREF(txn, mp)
 #define MDB_CURSOR_UNREF(mc, force) ((void)0)
-#endif /* MDB_VL32 */
+//#endif /* MDB_VL32 */
 
 /** Loosen or free a single page.
  * Saves single pages to a list for future reuse
@@ -3088,9 +3065,9 @@ mdb_txn_renew0(MDB_txn *txn)
 
 	/* Moved to here to avoid a data race in read TXNs */
 	txn->mt_next_pgno = meta->mm_last_pg+1;
-#ifdef MDB_VL32
-	txn->mt_last_pgno = txn->mt_next_pgno - 1;
-#endif
+//#ifdef MDB_VL32
+//	txn->mt_last_pgno = txn->mt_next_pgno - 1;
+//#endif
 
 	txn->mt_flags = flags;
 
@@ -3169,17 +3146,17 @@ mdb_txn_begin(MDB_env *env, MDB_txn *parent, uint64_t flags, MDB_txn **ret)
 		DPRINTF(("calloc: %s", strerror(errno)));
 		return ENOMEM;
 	}
-#ifdef MDB_VL32
-	if (!parent) {
-		txn->mt_rpages = malloc(MDB_TRPAGE_SIZE * sizeof(MDB_ID3));
-		if (!txn->mt_rpages) {
-			free(txn);
-			return ENOMEM;
-		}
-		txn->mt_rpages[0].mid = 0;
-		txn->mt_rpcheck = MDB_TRPAGE_SIZE/2;
-	}
-#endif
+//#ifdef MDB_VL32
+//	if (!parent) {
+//		txn->mt_rpages = malloc(MDB_TRPAGE_SIZE * sizeof(MDB_ID3));
+//		if (!txn->mt_rpages) {
+//			free(txn);
+//			return ENOMEM;
+//		}
+//		txn->mt_rpages[0].mid = 0;
+//		txn->mt_rpcheck = MDB_TRPAGE_SIZE/2;
+//	}
+//#endif
 	txn->mt_dbxs = env->me_dbxs;	/* static */
 	txn->mt_dbs = (MDB_db *) ((char *)txn + tsize);
     txn->mt_dbflags = (uint8_t *)txn + size - env->me_maxdbs;
@@ -3207,9 +3184,9 @@ mdb_txn_begin(MDB_env *env, MDB_txn *parent, uint64_t flags, MDB_txn **ret)
 		parent->mt_child = txn;
 		txn->mt_parent = parent;
 		txn->mt_numdbs = parent->mt_numdbs;
-#ifdef MDB_VL32
-		txn->mt_rpages = parent->mt_rpages;
-#endif
+//#ifdef MDB_VL32
+//		txn->mt_rpages = parent->mt_rpages;
+//#endif
 		memcpy(txn->mt_dbs, parent->mt_dbs, txn->mt_numdbs * sizeof(MDB_db));
 		/* Copy parent's mt_dbflags, but clear DB_NEW */
 		for (i=0; i<txn->mt_numdbs; i++)
@@ -3236,9 +3213,9 @@ renew:
 	}
 	if (rc) {
 		if (txn != env->me_txn0) {
-#ifdef MDB_VL32
-			free(txn->mt_rpages);
-#endif
+//#ifdef MDB_VL32
+//			free(txn->mt_rpages);
+//#endif
 			free(txn);
 		}
 	} else {
@@ -3365,31 +3342,31 @@ mdb_txn_end(MDB_txn *txn, unsigned mode)
 
 		mdb_midl_free(pghead);
 	}
-#ifdef MDB_VL32
-	if (!txn->mt_parent) {
-		MDB_ID3L el = env->me_rpages, tl = txn->mt_rpages;
-		unsigned i, x, n = tl[0].mid;
-		pthread_mutex_lock(&env->me_rpmutex);
-		for (i = 1; i <= n; i++) {
-			if (tl[i].mid & (MDB_RPAGE_CHUNK-1)) {
-				/* tmp overflow pages that we didn't share in env */
-				munmap(tl[i].mptr, tl[i].mcnt * env->me_psize);
-			} else {
-				x = mdb_mid3l_search(el, tl[i].mid);
-				if (tl[i].mptr == el[x].mptr) {
-					el[x].mref--;
-				} else {
-					/* another tmp overflow page */
-					munmap(tl[i].mptr, tl[i].mcnt * env->me_psize);
-				}
-			}
-		}
-		pthread_mutex_unlock(&env->me_rpmutex);
-		tl[0].mid = 0;
-		if (mode & MDB_END_FREE)
-			free(tl);
-	}
-#endif
+//#ifdef MDB_VL32
+//	if (!txn->mt_parent) {
+//		MDB_ID3L el = env->me_rpages, tl = txn->mt_rpages;
+//		unsigned i, x, n = tl[0].mid;
+//		pthread_mutex_lock(&env->me_rpmutex);
+//		for (i = 1; i <= n; i++) {
+//			if (tl[i].mid & (MDB_RPAGE_CHUNK-1)) {
+//				/* tmp overflow pages that we didn't share in env */
+//				munmap(tl[i].mptr, tl[i].mcnt * env->me_psize);
+//			} else {
+//				x = mdb_mid3l_search(el, tl[i].mid);
+//				if (tl[i].mptr == el[x].mptr) {
+//					el[x].mref--;
+//				} else {
+//					/* another tmp overflow page */
+//					munmap(tl[i].mptr, tl[i].mcnt * env->me_psize);
+//				}
+//			}
+//		}
+//		pthread_mutex_unlock(&env->me_rpmutex);
+//		tl[0].mid = 0;
+//		if (mode & MDB_END_FREE)
+//			free(tl);
+//	}
+//#endif
 	if (mode & MDB_END_FREE)
 		free(txn);
 }
@@ -3773,10 +3750,10 @@ retry_seek:
 		n++;
 #endif	/* _WIN32 */
 	}
-#ifdef MDB_VL32
-	if (pgno > txn->mt_last_pgno)
-		txn->mt_last_pgno = pgno;
-#endif
+//#ifdef MDB_VL32
+//	if (pgno > txn->mt_last_pgno)
+//		txn->mt_last_pgno = pgno;
+//#endif
 
 	/* MIPS has cache coherency issues, this is a no-op everywhere else
 	 * Note: for any size >= on-chip cache size, entire on-chip cache is
@@ -4380,27 +4357,27 @@ mdb_env_map(MDB_env *env, void *addr)
 	if (rc)
 		return mdb_nt2win32(rc);
 	map = addr;
-#ifdef MDB_VL32
-	msize = NUM_METAS * env->me_psize;
-#endif
+//#ifdef MDB_VL32
+//	msize = NUM_METAS * env->me_psize;
+//#endif
 	rc = NtMapViewOfSection(mh, GetCurrentProcess(), &map, 0, 0, NULL, &msize, ViewUnmap, alloctype, pageprot);
-#ifdef MDB_VL32
-	env->me_fmh = mh;
-#else
+//#ifdef MDB_VL32
+//	env->me_fmh = mh;
+//#else
 	NtClose(mh);
-#endif
+//#endif
 	if (rc)
 		return mdb_nt2win32(rc);
 	env->me_map = map;
 #else
 #ifdef MDB_VL32
-	(void) flags;
-	env->me_map = mmap(addr, NUM_METAS * env->me_psize, PROT_READ, MAP_SHARED,
-		env->me_fd, 0);
-	if (env->me_map == MAP_FAILED) {
-		env->me_map = NULL;
-		return ErrCode();
-	}
+//    (void) flags;
+//    env->me_map = mmap(addr, NUM_METAS * env->me_psize, PROT_READ, MAP_SHARED,
+//        env->me_fd, 0);
+//    if (env->me_map == MAP_FAILED) {
+//        env->me_map = NULL;
+//        return ErrCode();
+//    }
 #else
 	int prot = PROT_READ;
 	if (flags & MDB_WRITEMAP) {
@@ -4451,10 +4428,10 @@ mdb_env_set_mapsize(MDB_env *env, mdb_size_t size)
 	 */
 	if (env->me_map) {
 		MDB_meta *meta;
-#ifndef MDB_VL32
+//#ifndef MDB_VL32
 		void *old;
 		int rc;
-#endif
+//#endif
 		if (env->me_txn)
 			return EINVAL;
 		meta = mdb_env_pick_meta(env);
@@ -4466,7 +4443,7 @@ mdb_env_set_mapsize(MDB_env *env, mdb_size_t size)
 			if (size < minsize)
 				size = minsize;
 		}
-#ifndef MDB_VL32
+//#ifndef MDB_VL32
 		/* For MDB_VL32 this bit is a noop since we dynamically remap
 		 * chunks of the DB anyway.
 		 */
@@ -4476,7 +4453,7 @@ mdb_env_set_mapsize(MDB_env *env, mdb_size_t size)
 		rc = mdb_env_map(env, old);
 		if (rc)
 			return rc;
-#endif /* !MDB_VL32 */
+//#endif /* !MDB_VL32 */
 	}
 	env->me_mapsize = size;
 	if (env->me_psize)
@@ -5415,35 +5392,35 @@ mdb_env_open(MDB_env *env, const char *path, uint64_t flags, mdb_mode_t mode)
 	if (env->me_fd!=INVALID_HANDLE_VALUE || (flags & ~(CHANGEABLE|CHANGELESS)))
 		return EINVAL;
 
-#ifdef MDB_VL32
-	if (flags & MDB_WRITEMAP) {
-		/* silently ignore WRITEMAP in 32 bit mode */
-		flags ^= MDB_WRITEMAP;
-	}
-	if (flags & MDB_FIXEDMAP) {
-		/* cannot support FIXEDMAP */
-		return EINVAL;
-	}
-#endif
+//#ifdef MDB_VL32
+//	if (flags & MDB_WRITEMAP) {
+//		/* silently ignore WRITEMAP in 32 bit mode */
+//		flags ^= MDB_WRITEMAP;
+//	}
+//	if (flags & MDB_FIXEDMAP) {
+//		/* cannot support FIXEDMAP */
+//		return EINVAL;
+//	}
+//#endif
 	flags |= env->me_flags;
 
 	rc = mdb_fname_init(path, flags, &fname);
 	if (rc)
 		return rc;
 
-#ifdef MDB_VL32
-#ifdef _WIN32
-	env->me_rpmutex = CreateMutex(NULL, FALSE, NULL);
-	if (!env->me_rpmutex) {
-		rc = ErrCode();
-		goto leave;
-	}
-#else
-	rc = pthread_mutex_init(&env->me_rpmutex, NULL);
-	if (rc)
-		goto leave;
-#endif
-#endif
+//#ifdef MDB_VL32
+//#ifdef _WIN32
+//	env->me_rpmutex = CreateMutex(NULL, FALSE, NULL);
+//	if (!env->me_rpmutex) {
+//		rc = ErrCode();
+//		goto leave;
+//	}
+//#else
+//	rc = pthread_mutex_init(&env->me_rpmutex, NULL);
+//	if (rc)
+//		goto leave;
+//#endif
+//#endif
 	flags |= MDB_ENV_ACTIVE;	/* tell mdb_env_close0() to clean up */
 
 	if (flags & MDB_RDONLY) {
@@ -5459,17 +5436,17 @@ mdb_env_open(MDB_env *env, const char *path, uint64_t flags, mdb_mode_t mode)
 	if (rc)
 		goto leave;
 
-#ifdef MDB_VL32
-	{
-		env->me_rpages = malloc(MDB_ERPAGE_SIZE * sizeof(MDB_ID3));
-		if (!env->me_rpages) {
-			rc = ENOMEM;
-			goto leave;
-		}
-		env->me_rpages[0].mid = 0;
-		env->me_rpcheck = MDB_ERPAGE_SIZE/2;
-	}
-#endif
+//#ifdef MDB_VL32
+//	{
+//		env->me_rpages = malloc(MDB_ERPAGE_SIZE * sizeof(MDB_ID3));
+//		if (!env->me_rpages) {
+//			rc = ENOMEM;
+//			goto leave;
+//		}
+//		env->me_rpages[0].mid = 0;
+//		env->me_rpcheck = MDB_ERPAGE_SIZE/2;
+//	}
+//#endif
 
 	env->me_path = strdup(path);
     env->me_dbxs = (MDB_dbx *) calloc(env->me_maxdbs, sizeof(MDB_dbx));
@@ -5527,16 +5504,16 @@ mdb_env_open(MDB_env *env, const char *path, uint64_t flags, mdb_mode_t mode)
 				txn->mt_dbiseqs = (uint64_t *)(txn->mt_cursors + env->me_maxdbs);
                 txn->mt_dbflags = (uint8_t *)(txn->mt_dbiseqs + env->me_maxdbs);
 				txn->mt_env = env;
-#ifdef MDB_VL32
-				txn->mt_rpages = malloc(MDB_TRPAGE_SIZE * sizeof(MDB_ID3));
-				if (!txn->mt_rpages) {
-					free(txn);
-					rc = ENOMEM;
-					goto leave;
-				}
-				txn->mt_rpages[0].mid = 0;
-				txn->mt_rpcheck = MDB_TRPAGE_SIZE/2;
-#endif
+//#ifdef MDB_VL32
+//				txn->mt_rpages = malloc(MDB_TRPAGE_SIZE * sizeof(MDB_ID3));
+//				if (!txn->mt_rpages) {
+//					free(txn);
+//					rc = ENOMEM;
+//					goto leave;
+//				}
+//				txn->mt_rpages[0].mid = 0;
+//				txn->mt_rpcheck = MDB_TRPAGE_SIZE/2;
+//#endif
 				txn->mt_dbxs = env->me_dbxs;
 				txn->mt_flags = MDB_TXN_FINISHED;
 				env->me_txn0 = txn;
@@ -5575,17 +5552,17 @@ mdb_env_close0(MDB_env *env, int excl)
 	free(env->me_dbflags);
 	free(env->me_path);
 	free(env->me_dirty_list);
-#ifdef MDB_VL32
-	if (env->me_txn0 && env->me_txn0->mt_rpages)
-		free(env->me_txn0->mt_rpages);
-	if (env->me_rpages) {
-		MDB_ID3L el = env->me_rpages;
-		uint64_t x;
-		for (x=1; x<=el[0].mid; x++)
-			munmap(el[x].mptr, el[x].mcnt * env->me_psize);
-		free(el);
-	}
-#endif
+//#ifdef MDB_VL32
+//	if (env->me_txn0 && env->me_txn0->mt_rpages)
+//		free(env->me_txn0->mt_rpages);
+//	if (env->me_rpages) {
+//		MDB_ID3L el = env->me_rpages;
+//		uint64_t x;
+//		for (x=1; x<=el[0].mid; x++)
+//			munmap(el[x].mptr, el[x].mcnt * env->me_psize);
+//		free(el);
+//	}
+//#endif
 	free(env->me_txn0);
 	mdb_midl_free(env->me_free_pgs);
 
@@ -5603,11 +5580,11 @@ mdb_env_close0(MDB_env *env, int excl)
 	}
 
 	if (env->me_map) {
-#ifdef MDB_VL32
-		munmap(env->me_map, NUM_METAS*env->me_psize);
-#else
+//#ifdef MDB_VL32
+//		munmap(env->me_map, NUM_METAS*env->me_psize);
+//#else
 		munmap(env->me_map, env->me_mapsize);
-#endif
+//#endif
 	}
 	if (env->me_mfd != INVALID_HANDLE_VALUE)
 		(void) close(env->me_mfd);
@@ -5672,14 +5649,14 @@ mdb_env_close0(MDB_env *env, int excl)
 #endif
 		(void) close(env->me_lfd);
 	}
-#ifdef MDB_VL32
-#ifdef _WIN32
-	if (env->me_fmh) CloseHandle(env->me_fmh);
-	if (env->me_rpmutex) CloseHandle(env->me_rpmutex);
-#else
-	pthread_mutex_destroy(&env->me_rpmutex);
-#endif
-#endif
+//#ifdef MDB_VL32
+//#ifdef _WIN32
+//	if (env->me_fmh) CloseHandle(env->me_fmh);
+//	if (env->me_rpmutex) CloseHandle(env->me_rpmutex);
+//#else
+//	pthread_mutex_destroy(&env->me_rpmutex);
+//#endif
+//#endif
 
 	env->me_flags &= ~(MDB_ENV_ACTIVE|MDB_ENV_TXKEY);
 }
@@ -5948,293 +5925,293 @@ mdb_cursor_push(MDB_cursor *mc, MDB_page *mp)
 	return MDB_SUCCESS;
 }
 
-#ifdef MDB_VL32
-/** Map a read-only page.
- * There are two levels of tracking in use, a per-txn list and a per-env list.
- * ref'ing and unref'ing the per-txn list is faster since it requires no
- * locking. Pages are cached in the per-env list for global reuse, and a lock
- * is required. Pages are not immediately unmapped when their refcnt goes to
- * zero; they hang around in case they will be reused again soon.
- *
- * When the per-txn list gets full, all pages with refcnt=0 are purged from the
- * list and their refcnts in the per-env list are decremented.
- *
- * When the per-env list gets full, all pages with refcnt=0 are purged from the
- * list and their pages are unmapped.
- *
- * @note "full" means the list has reached its respective rpcheck threshold.
- * This threshold slowly raises if no pages could be purged on a given check,
- * and returns to its original value when enough pages were purged.
- *
- * If purging doesn't free any slots, filling the per-txn list will return
- * MDB_TXN_FULL, and filling the per-env list returns MDB_MAP_FULL.
- *
- * Reference tracking in a txn is imperfect, pages can linger with non-zero
- * refcnt even without active references. It was deemed to be too invasive
- * to add unrefs in every required location. However, all pages are unref'd
- * at the end of the transaction. This guarantees that no stale references
- * linger in the per-env list.
- *
- * Usually we map chunks of 16 pages at a time, but if an overflow page begins
- * at the tail of the chunk we extend the chunk to include the entire overflow
- * page. Unfortunately, pages can be turned into overflow pages after their
- * chunk was already mapped. In that case we must remap the chunk if the
- * overflow page is referenced. If the chunk's refcnt is 0 we can just remap
- * it, otherwise we temporarily map a new chunk just for the overflow page.
- *
- * @note this chunk handling means we cannot guarantee that a data item
- * returned from the DB will stay alive for the duration of the transaction:
- *   We unref pages as soon as a cursor moves away from the page
- *   A subsequent op may cause a purge, which may unmap any unref'd chunks
- * The caller must copy the data if it must be used later in the same txn.
- *
- * Also - our reference counting revolves around cursors, but overflow pages
- * aren't pointed to by a cursor's page stack. We have to remember them
- * explicitly, in the added mc_ovpg field. A single cursor can only hold a
- * reference to one overflow page at a time.
- *
- * @param[in] txn the transaction for this access.
- * @param[in] pgno the page number for the page to retrieve.
- * @param[out] ret address of a pointer where the page's address will be stored.
- * @return 0 on success, non-zero on failure.
- */
-static int
-mdb_rpage_get(MDB_txn *txn, pgno_t pg0, MDB_page **ret)
-{
-	MDB_env *env = txn->mt_env;
-	MDB_page *p;
-	MDB_ID3L tl = txn->mt_rpages;
-	MDB_ID3L el = env->me_rpages;
-	MDB_ID3 id3;
-	unsigned x, rem;
-	pgno_t pgno;
-	int rc, retries = 1;
-#ifdef _WIN32
-	LARGE_INTEGER off;
-	SIZE_T len;
-#define SET_OFF(off,val)	off.QuadPart = val
-#define MAP(rc,env,addr,len,off)	\
-	addr = NULL; \
-	rc = NtMapViewOfSection(env->me_fmh, GetCurrentProcess(), &addr, 0, \
-		len, &off, &len, ViewUnmap, (env->me_flags & MDB_RDONLY) ? 0 : MEM_RESERVE, PAGE_READONLY); \
-	if (rc) rc = mdb_nt2win32(rc)
-#else
-	off_t off;
-	size_t len;
-#define SET_OFF(off,val)	off = val
-#define MAP(rc,env,addr,len,off)	\
-	addr = mmap(NULL, len, PROT_READ, MAP_SHARED, env->me_fd, off); \
-	rc = (addr == MAP_FAILED) ? errno : 0
-#endif
+//#ifdef MDB_VL32
+///** Map a read-only page.
+// * There are two levels of tracking in use, a per-txn list and a per-env list.
+// * ref'ing and unref'ing the per-txn list is faster since it requires no
+// * locking. Pages are cached in the per-env list for global reuse, and a lock
+// * is required. Pages are not immediately unmapped when their refcnt goes to
+// * zero; they hang around in case they will be reused again soon.
+// *
+// * When the per-txn list gets full, all pages with refcnt=0 are purged from the
+// * list and their refcnts in the per-env list are decremented.
+// *
+// * When the per-env list gets full, all pages with refcnt=0 are purged from the
+// * list and their pages are unmapped.
+// *
+// * @note "full" means the list has reached its respective rpcheck threshold.
+// * This threshold slowly raises if no pages could be purged on a given check,
+// * and returns to its original value when enough pages were purged.
+// *
+// * If purging doesn't free any slots, filling the per-txn list will return
+// * MDB_TXN_FULL, and filling the per-env list returns MDB_MAP_FULL.
+// *
+// * Reference tracking in a txn is imperfect, pages can linger with non-zero
+// * refcnt even without active references. It was deemed to be too invasive
+// * to add unrefs in every required location. However, all pages are unref'd
+// * at the end of the transaction. This guarantees that no stale references
+// * linger in the per-env list.
+// *
+// * Usually we map chunks of 16 pages at a time, but if an overflow page begins
+// * at the tail of the chunk we extend the chunk to include the entire overflow
+// * page. Unfortunately, pages can be turned into overflow pages after their
+// * chunk was already mapped. In that case we must remap the chunk if the
+// * overflow page is referenced. If the chunk's refcnt is 0 we can just remap
+// * it, otherwise we temporarily map a new chunk just for the overflow page.
+// *
+// * @note this chunk handling means we cannot guarantee that a data item
+// * returned from the DB will stay alive for the duration of the transaction:
+// *   We unref pages as soon as a cursor moves away from the page
+// *   A subsequent op may cause a purge, which may unmap any unref'd chunks
+// * The caller must copy the data if it must be used later in the same txn.
+// *
+// * Also - our reference counting revolves around cursors, but overflow pages
+// * aren't pointed to by a cursor's page stack. We have to remember them
+// * explicitly, in the added mc_ovpg field. A single cursor can only hold a
+// * reference to one overflow page at a time.
+// *
+// * @param[in] txn the transaction for this access.
+// * @param[in] pgno the page number for the page to retrieve.
+// * @param[out] ret address of a pointer where the page's address will be stored.
+// * @return 0 on success, non-zero on failure.
+// */
+//static int
+//mdb_rpage_get(MDB_txn *txn, pgno_t pg0, MDB_page **ret)
+//{
+//	MDB_env *env = txn->mt_env;
+//	MDB_page *p;
+//	MDB_ID3L tl = txn->mt_rpages;
+//	MDB_ID3L el = env->me_rpages;
+//	MDB_ID3 id3;
+//	unsigned x, rem;
+//	pgno_t pgno;
+//	int rc, retries = 1;
+//#ifdef _WIN32
+//	LARGE_INTEGER off;
+//	SIZE_T len;
+//#define SET_OFF(off,val)	off.QuadPart = val
+//#define MAP(rc,env,addr,len,off)	\
+//	addr = NULL; \
+//	rc = NtMapViewOfSection(env->me_fmh, GetCurrentProcess(), &addr, 0, \
+//		len, &off, &len, ViewUnmap, (env->me_flags & MDB_RDONLY) ? 0 : MEM_RESERVE, PAGE_READONLY); \
+//	if (rc) rc = mdb_nt2win32(rc)
+//#else
+//	off_t off;
+//	size_t len;
+//#define SET_OFF(off,val)	off = val
+//#define MAP(rc,env,addr,len,off)	\
+//	addr = mmap(NULL, len, PROT_READ, MAP_SHARED, env->me_fd, off); \
+//	rc = (addr == MAP_FAILED) ? errno : 0
+//#endif
 
-	/* remember the offset of the actual page number, so we can
-	 * return the correct pointer at the end.
-	 */
-	rem = pg0 & (MDB_RPAGE_CHUNK-1);
-	pgno = pg0 ^ rem;
+//	/* remember the offset of the actual page number, so we can
+//	 * return the correct pointer at the end.
+//	 */
+//	rem = pg0 & (MDB_RPAGE_CHUNK-1);
+//	pgno = pg0 ^ rem;
 
-	id3.mid = 0;
-	x = mdb_mid3l_search(tl, pgno);
-	if (x <= tl[0].mid && tl[x].mid == pgno) {
-		if (x != tl[0].mid && tl[x+1].mid == pg0)
-			x++;
-		/* check for overflow size */
-		p = (MDB_page *)((char *)tl[x].mptr + rem * env->me_psize);
-		if (IS_OVERFLOW(p) && p->mp_pages + rem > tl[x].mcnt) {
-			id3.mcnt = p->mp_pages + rem;
-			len = id3.mcnt * env->me_psize;
-			SET_OFF(off, pgno * env->me_psize);
-			MAP(rc, env, id3.mptr, len, off);
-			if (rc)
-				return rc;
-			/* check for local-only page */
-			if (rem) {
-				mdb_tassert(txn, tl[x].mid != pg0);
-				/* hope there's room to insert this locally.
-				 * setting mid here tells later code to just insert
-				 * this id3 instead of searching for a match.
-				 */
-				id3.mid = pg0;
-				goto notlocal;
-			} else {
-				/* ignore the mapping we got from env, use new one */
-				tl[x].mptr = id3.mptr;
-				tl[x].mcnt = id3.mcnt;
-				/* if no active ref, see if we can replace in env */
-				if (!tl[x].mref) {
-					unsigned i;
-					pthread_mutex_lock(&env->me_rpmutex);
-					i = mdb_mid3l_search(el, tl[x].mid);
-					if (el[i].mref == 1) {
-						/* just us, replace it */
-						munmap(el[i].mptr, el[i].mcnt * env->me_psize);
-						el[i].mptr = tl[x].mptr;
-						el[i].mcnt = tl[x].mcnt;
-					} else {
-						/* there are others, remove ourself */
-						el[i].mref--;
-					}
-					pthread_mutex_unlock(&env->me_rpmutex);
-				}
-			}
-		}
-		id3.mptr = tl[x].mptr;
-		id3.mcnt = tl[x].mcnt;
-		tl[x].mref++;
-		goto ok;
-	}
+//	id3.mid = 0;
+//	x = mdb_mid3l_search(tl, pgno);
+//	if (x <= tl[0].mid && tl[x].mid == pgno) {
+//		if (x != tl[0].mid && tl[x+1].mid == pg0)
+//			x++;
+//		/* check for overflow size */
+//		p = (MDB_page *)((char *)tl[x].mptr + rem * env->me_psize);
+//		if (IS_OVERFLOW(p) && p->mp_pages + rem > tl[x].mcnt) {
+//			id3.mcnt = p->mp_pages + rem;
+//			len = id3.mcnt * env->me_psize;
+//			SET_OFF(off, pgno * env->me_psize);
+//			MAP(rc, env, id3.mptr, len, off);
+//			if (rc)
+//				return rc;
+//			/* check for local-only page */
+//			if (rem) {
+//				mdb_tassert(txn, tl[x].mid != pg0);
+//				/* hope there's room to insert this locally.
+//				 * setting mid here tells later code to just insert
+//				 * this id3 instead of searching for a match.
+//				 */
+//				id3.mid = pg0;
+//				goto notlocal;
+//			} else {
+//				/* ignore the mapping we got from env, use new one */
+//				tl[x].mptr = id3.mptr;
+//				tl[x].mcnt = id3.mcnt;
+//				/* if no active ref, see if we can replace in env */
+//				if (!tl[x].mref) {
+//					unsigned i;
+//					pthread_mutex_lock(&env->me_rpmutex);
+//					i = mdb_mid3l_search(el, tl[x].mid);
+//					if (el[i].mref == 1) {
+//						/* just us, replace it */
+//						munmap(el[i].mptr, el[i].mcnt * env->me_psize);
+//						el[i].mptr = tl[x].mptr;
+//						el[i].mcnt = tl[x].mcnt;
+//					} else {
+//						/* there are others, remove ourself */
+//						el[i].mref--;
+//					}
+//					pthread_mutex_unlock(&env->me_rpmutex);
+//				}
+//			}
+//		}
+//		id3.mptr = tl[x].mptr;
+//		id3.mcnt = tl[x].mcnt;
+//		tl[x].mref++;
+//		goto ok;
+//	}
 
-notlocal:
-	if (tl[0].mid >= MDB_TRPAGE_MAX - txn->mt_rpcheck) {
-		unsigned i, y;
-		/* purge unref'd pages from our list and unref in env */
-		pthread_mutex_lock(&env->me_rpmutex);
-retry:
-		y = 0;
-		for (i=1; i<=tl[0].mid; i++) {
-			if (!tl[i].mref) {
-				if (!y) y = i;
-				/* tmp overflow pages don't go to env */
-				if (tl[i].mid & (MDB_RPAGE_CHUNK-1)) {
-					munmap(tl[i].mptr, tl[i].mcnt * env->me_psize);
-					continue;
-				}
-				x = mdb_mid3l_search(el, tl[i].mid);
-				el[x].mref--;
-			}
-		}
-		pthread_mutex_unlock(&env->me_rpmutex);
-		if (!y) {
-			/* we didn't find any unref'd chunks.
-			 * if we're out of room, fail.
-			 */
-			if (tl[0].mid >= MDB_TRPAGE_MAX)
-				return MDB_TXN_FULL;
-			/* otherwise, raise threshold for next time around
-			 * and let this go.
-			 */
-			txn->mt_rpcheck /= 2;
-		} else {
-			/* we found some unused; consolidate the list */
-			for (i=y+1; i<= tl[0].mid; i++)
-				if (tl[i].mref)
-					tl[y++] = tl[i];
-			tl[0].mid = y-1;
-			/* decrease the check threshold toward its original value */
-			if (!txn->mt_rpcheck)
-				txn->mt_rpcheck = 1;
-			while (txn->mt_rpcheck < tl[0].mid && txn->mt_rpcheck < MDB_TRPAGE_SIZE/2)
-				txn->mt_rpcheck *= 2;
-		}
-	}
-	if (tl[0].mid < MDB_TRPAGE_SIZE) {
-		id3.mref = 1;
-		if (id3.mid)
-			goto found;
-		/* don't map past last written page in read-only envs */
-		if ((env->me_flags & MDB_RDONLY) && pgno + MDB_RPAGE_CHUNK-1 > txn->mt_last_pgno)
-			id3.mcnt = txn->mt_last_pgno + 1 - pgno;
-		else
-			id3.mcnt = MDB_RPAGE_CHUNK;
-		len = id3.mcnt * env->me_psize;
-		id3.mid = pgno;
+//notlocal:
+//	if (tl[0].mid >= MDB_TRPAGE_MAX - txn->mt_rpcheck) {
+//		unsigned i, y;
+//		/* purge unref'd pages from our list and unref in env */
+//		pthread_mutex_lock(&env->me_rpmutex);
+//retry:
+//		y = 0;
+//		for (i=1; i<=tl[0].mid; i++) {
+//			if (!tl[i].mref) {
+//				if (!y) y = i;
+//				/* tmp overflow pages don't go to env */
+//				if (tl[i].mid & (MDB_RPAGE_CHUNK-1)) {
+//					munmap(tl[i].mptr, tl[i].mcnt * env->me_psize);
+//					continue;
+//				}
+//				x = mdb_mid3l_search(el, tl[i].mid);
+//				el[x].mref--;
+//			}
+//		}
+//		pthread_mutex_unlock(&env->me_rpmutex);
+//		if (!y) {
+//			/* we didn't find any unref'd chunks.
+//			 * if we're out of room, fail.
+//			 */
+//			if (tl[0].mid >= MDB_TRPAGE_MAX)
+//				return MDB_TXN_FULL;
+//			/* otherwise, raise threshold for next time around
+//			 * and let this go.
+//			 */
+//			txn->mt_rpcheck /= 2;
+//		} else {
+//			/* we found some unused; consolidate the list */
+//			for (i=y+1; i<= tl[0].mid; i++)
+//				if (tl[i].mref)
+//					tl[y++] = tl[i];
+//			tl[0].mid = y-1;
+//			/* decrease the check threshold toward its original value */
+//			if (!txn->mt_rpcheck)
+//				txn->mt_rpcheck = 1;
+//			while (txn->mt_rpcheck < tl[0].mid && txn->mt_rpcheck < MDB_TRPAGE_SIZE/2)
+//				txn->mt_rpcheck *= 2;
+//		}
+//	}
+//	if (tl[0].mid < MDB_TRPAGE_SIZE) {
+//		id3.mref = 1;
+//		if (id3.mid)
+//			goto found;
+//		/* don't map past last written page in read-only envs */
+//		if ((env->me_flags & MDB_RDONLY) && pgno + MDB_RPAGE_CHUNK-1 > txn->mt_last_pgno)
+//			id3.mcnt = txn->mt_last_pgno + 1 - pgno;
+//		else
+//			id3.mcnt = MDB_RPAGE_CHUNK;
+//		len = id3.mcnt * env->me_psize;
+//		id3.mid = pgno;
 
-		/* search for page in env */
-		pthread_mutex_lock(&env->me_rpmutex);
-		x = mdb_mid3l_search(el, pgno);
-		if (x <= el[0].mid && el[x].mid == pgno) {
-			id3.mptr = el[x].mptr;
-			id3.mcnt = el[x].mcnt;
-			/* check for overflow size */
-			p = (MDB_page *)((char *)id3.mptr + rem * env->me_psize);
-			if (IS_OVERFLOW(p) && p->mp_pages + rem > id3.mcnt) {
-				id3.mcnt = p->mp_pages + rem;
-				len = id3.mcnt * env->me_psize;
-				SET_OFF(off, pgno * env->me_psize);
-				MAP(rc, env, id3.mptr, len, off);
-				if (rc)
-					goto fail;
-				if (!el[x].mref) {
-					munmap(el[x].mptr, env->me_psize * el[x].mcnt);
-					el[x].mptr = id3.mptr;
-					el[x].mcnt = id3.mcnt;
-				} else {
-					id3.mid = pg0;
-					pthread_mutex_unlock(&env->me_rpmutex);
-					goto found;
-				}
-			}
-			el[x].mref++;
-			pthread_mutex_unlock(&env->me_rpmutex);
-			goto found;
-		}
-		if (el[0].mid >= MDB_ERPAGE_MAX - env->me_rpcheck) {
-			/* purge unref'd pages */
-			unsigned i, y = 0;
-			for (i=1; i<=el[0].mid; i++) {
-				if (!el[i].mref) {
-					if (!y) y = i;
-					munmap(el[i].mptr, env->me_psize * el[i].mcnt);
-				}
-			}
-			if (!y) {
-				if (retries) {
-					/* see if we can unref some local pages */
-					retries--;
-					id3.mid = 0;
-					goto retry;
-				}
-				if (el[0].mid >= MDB_ERPAGE_MAX) {
-					pthread_mutex_unlock(&env->me_rpmutex);
-					return MDB_MAP_FULL;
-				}
-				env->me_rpcheck /= 2;
-			} else {
-				for (i=y+1; i<= el[0].mid; i++)
-					if (el[i].mref)
-						el[y++] = el[i];
-				el[0].mid = y-1;
-				if (!env->me_rpcheck)
-					env->me_rpcheck = 1;
-				while (env->me_rpcheck < el[0].mid && env->me_rpcheck < MDB_ERPAGE_SIZE/2)
-					env->me_rpcheck *= 2;
-			}
-		}
-		SET_OFF(off, pgno * env->me_psize);
-		MAP(rc, env, id3.mptr, len, off);
-		if (rc) {
-fail:
-			pthread_mutex_unlock(&env->me_rpmutex);
-			return rc;
-		}
-		/* check for overflow size */
-		p = (MDB_page *)((char *)id3.mptr + rem * env->me_psize);
-		if (IS_OVERFLOW(p) && p->mp_pages + rem > id3.mcnt) {
-			id3.mcnt = p->mp_pages + rem;
-			munmap(id3.mptr, len);
-			len = id3.mcnt * env->me_psize;
-			MAP(rc, env, id3.mptr, len, off);
-			if (rc)
-				goto fail;
-		}
-		mdb_mid3l_insert(el, &id3);
-		pthread_mutex_unlock(&env->me_rpmutex);
-found:
-		mdb_mid3l_insert(tl, &id3);
-	} else {
-		return MDB_TXN_FULL;
-	}
-ok:
-	p = (MDB_page *)((char *)id3.mptr + rem * env->me_psize);
-#if MDB_DEBUG	/* we don't need this check any more */
-	if (IS_OVERFLOW(p)) {
-		mdb_tassert(txn, p->mp_pages + rem <= id3.mcnt);
-	}
-#endif
-	*ret = p;
-	return MDB_SUCCESS;
-}
-#endif
+//		/* search for page in env */
+//		pthread_mutex_lock(&env->me_rpmutex);
+//		x = mdb_mid3l_search(el, pgno);
+//		if (x <= el[0].mid && el[x].mid == pgno) {
+//			id3.mptr = el[x].mptr;
+//			id3.mcnt = el[x].mcnt;
+//			/* check for overflow size */
+//			p = (MDB_page *)((char *)id3.mptr + rem * env->me_psize);
+//			if (IS_OVERFLOW(p) && p->mp_pages + rem > id3.mcnt) {
+//				id3.mcnt = p->mp_pages + rem;
+//				len = id3.mcnt * env->me_psize;
+//				SET_OFF(off, pgno * env->me_psize);
+//				MAP(rc, env, id3.mptr, len, off);
+//				if (rc)
+//					goto fail;
+//				if (!el[x].mref) {
+//					munmap(el[x].mptr, env->me_psize * el[x].mcnt);
+//					el[x].mptr = id3.mptr;
+//					el[x].mcnt = id3.mcnt;
+//				} else {
+//					id3.mid = pg0;
+//					pthread_mutex_unlock(&env->me_rpmutex);
+//					goto found;
+//				}
+//			}
+//			el[x].mref++;
+//			pthread_mutex_unlock(&env->me_rpmutex);
+//			goto found;
+//		}
+//		if (el[0].mid >= MDB_ERPAGE_MAX - env->me_rpcheck) {
+//			/* purge unref'd pages */
+//			unsigned i, y = 0;
+//			for (i=1; i<=el[0].mid; i++) {
+//				if (!el[i].mref) {
+//					if (!y) y = i;
+//					munmap(el[i].mptr, env->me_psize * el[i].mcnt);
+//				}
+//			}
+//			if (!y) {
+//				if (retries) {
+//					/* see if we can unref some local pages */
+//					retries--;
+//					id3.mid = 0;
+//					goto retry;
+//				}
+//				if (el[0].mid >= MDB_ERPAGE_MAX) {
+//					pthread_mutex_unlock(&env->me_rpmutex);
+//					return MDB_MAP_FULL;
+//				}
+//				env->me_rpcheck /= 2;
+//			} else {
+//				for (i=y+1; i<= el[0].mid; i++)
+//					if (el[i].mref)
+//						el[y++] = el[i];
+//				el[0].mid = y-1;
+//				if (!env->me_rpcheck)
+//					env->me_rpcheck = 1;
+//				while (env->me_rpcheck < el[0].mid && env->me_rpcheck < MDB_ERPAGE_SIZE/2)
+//					env->me_rpcheck *= 2;
+//			}
+//		}
+//		SET_OFF(off, pgno * env->me_psize);
+//		MAP(rc, env, id3.mptr, len, off);
+//		if (rc) {
+//fail:
+//			pthread_mutex_unlock(&env->me_rpmutex);
+//			return rc;
+//		}
+//		/* check for overflow size */
+//		p = (MDB_page *)((char *)id3.mptr + rem * env->me_psize);
+//		if (IS_OVERFLOW(p) && p->mp_pages + rem > id3.mcnt) {
+//			id3.mcnt = p->mp_pages + rem;
+//			munmap(id3.mptr, len);
+//			len = id3.mcnt * env->me_psize;
+//			MAP(rc, env, id3.mptr, len, off);
+//			if (rc)
+//				goto fail;
+//		}
+//		mdb_mid3l_insert(el, &id3);
+//		pthread_mutex_unlock(&env->me_rpmutex);
+//found:
+//		mdb_mid3l_insert(tl, &id3);
+//	} else {
+//		return MDB_TXN_FULL;
+//	}
+//ok:
+//	p = (MDB_page *)((char *)id3.mptr + rem * env->me_psize);
+//#if MDB_DEBUG	/* we don't need this check any more */
+//	if (IS_OVERFLOW(p)) {
+//		mdb_tassert(txn, p->mp_pages + rem <= id3.mcnt);
+//	}
+//#endif
+//	*ret = p;
+//	return MDB_SUCCESS;
+//}
+//#endif
 
 /** Find the address of the page corresponding to a given page number.
  * Set #MDB_TXN_ERROR on failure.
@@ -6290,16 +6267,16 @@ mdb_page_get(MDB_cursor *mc, pgno_t pgno, MDB_page **ret, int *lvl)
 
 mapped:
 	{
-#ifdef MDB_VL32
-		int rc = mdb_rpage_get(txn, pgno, &p);
-		if (rc) {
-			txn->mt_flags |= MDB_TXN_ERROR;
-			return rc;
-		}
-#else
+//#ifdef MDB_VL32
+//		int rc = mdb_rpage_get(txn, pgno, &p);
+//		if (rc) {
+//			txn->mt_flags |= MDB_TXN_ERROR;
+//			return rc;
+//		}
+//#else
 		MDB_env *env = txn->mt_env;
 		p = (MDB_page *)(env->me_map + env->me_psize * pgno);
-#endif
+//#endif
 	}
 
 done:
@@ -6481,21 +6458,21 @@ mdb_page_search(MDB_cursor *mc, MDB_val *key, int flags)
 
 	mdb_cassert(mc, root > 1);
 	if (!mc->mc_pg[0] || mc->mc_pg[0]->mp_pgno != root) {
-#ifdef MDB_VL32
-		if (mc->mc_pg[0])
-			MDB_PAGE_UNREF(mc->mc_txn, mc->mc_pg[0]);
-#endif
+//#ifdef MDB_VL32
+//		if (mc->mc_pg[0])
+//			MDB_PAGE_UNREF(mc->mc_txn, mc->mc_pg[0]);
+//#endif
 		if ((rc = mdb_page_get(mc, root, &mc->mc_pg[0], NULL)) != 0)
 			return rc;
 	}
 
-#ifdef MDB_VL32
-	{
-		int i;
-		for (i=1; i<mc->mc_snum; i++)
-			MDB_PAGE_UNREF(mc->mc_txn, mc->mc_pg[i]);
-	}
-#endif
+//#ifdef MDB_VL32
+//	{
+//		int i;
+//		for (i=1; i<mc->mc_snum; i++)
+//			MDB_PAGE_UNREF(mc->mc_txn, mc->mc_pg[i]);
+//	}
+//#endif
 	mc->mc_snum = 1;
 	mc->mc_top = 0;
 
@@ -6585,10 +6562,10 @@ release:
 		if (rc)
 			return rc;
 	}
-#ifdef MDB_VL32
-	if (mc->mc_ovpg == mp)
-		mc->mc_ovpg = NULL;
-#endif
+//#ifdef MDB_VL32
+//	if (mc->mc_ovpg == mp)
+//		mc->mc_ovpg = NULL;
+//#endif
 	mc->mc_db->md_overflow_pages -= ovpages;
 	return 0;
 }
@@ -6670,17 +6647,17 @@ mdb_cursor_sibling(MDB_cursor *mc, int move_right)
 	int		 rc;
 	MDB_node	*indx;
 	MDB_page	*mp;
-#ifdef MDB_VL32
-	MDB_page	*op;
-#endif
+//#ifdef MDB_VL32
+//	MDB_page	*op;
+//#endif
 
 	if (mc->mc_snum < 2) {
 		return MDB_NOTFOUND;		/* root has no siblings */
 	}
 
-#ifdef MDB_VL32
-	op = mc->mc_pg[mc->mc_top];
-#endif
+//#ifdef MDB_VL32
+//	op = mc->mc_pg[mc->mc_top];
+//#endif
 	mdb_cursor_pop(mc);
     DPRINTF(("parent page is page %" Yu", index %u",
 		mc->mc_pg[mc->mc_top]->mp_pgno, mc->mc_ki[mc->mc_top]));
@@ -10799,11 +10776,11 @@ mdb_drop0(MDB_cursor *mc, int subs)
 			mdb_cursor_pop(mc);
 
 		mdb_cursor_copy(mc, &mx);
-#ifdef MDB_VL32
-		/* bump refcount for mx's pages */
-		for (i=0; i<mc->mc_snum; i++)
-			mdb_page_get(&mx, mc->mc_pg[i]->mp_pgno, &mx.mc_pg[i], NULL);
-#endif
+//#ifdef MDB_VL32
+//		/* bump refcount for mx's pages */
+//		for (i=0; i<mc->mc_snum; i++)
+//			mdb_page_get(&mx, mc->mc_pg[i]->mp_pgno, &mx.mc_pg[i], NULL);
+//#endif
 		while (mc->mc_snum > 0) {
 			MDB_page *mp = mc->mc_pg[mc->mc_top];
 			unsigned n = NUMKEYS(mp);
